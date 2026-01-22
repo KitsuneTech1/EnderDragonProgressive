@@ -52,11 +52,16 @@ public class DragonListener implements Listener {
         if (event.getEntityType() != EntityType.ENDER_DRAGON)
             return;
 
+        plugin.getLogger().info("=== DRAGON SPAWN EVENT ===");
+
         EnderDragon dragon = (EnderDragon) event.getEntity();
         int level = plugin.getConfig().getInt("next-dragon-level", 1);
 
+        plugin.getLogger().info("Config next-dragon-level: " + level);
+
         // Mark the dragon with its level
         dragon.getPersistentDataContainer().set(levelKey, org.bukkit.persistence.PersistentDataType.INTEGER, level);
+        plugin.getLogger().info("Tagged dragon with PDC level: " + level);
 
         // Scale Health
         double baseHealth = 200.0;
@@ -72,9 +77,11 @@ public class DragonListener implements Listener {
 
         dragon.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(health);
         dragon.setHealth(health);
+        plugin.getLogger().info("Set dragon health to: " + health);
 
         // Fix for stationary dragon: Set AI phase
         dragon.setPhase(EnderDragon.Phase.CIRCLING);
+        plugin.getLogger().info("Set dragon phase to CIRCLING");
 
         // Scale Damage (Implicitly via attribute if possible, or we manually handle
         // entity damage event)
@@ -149,32 +156,65 @@ public class DragonListener implements Listener {
         if (event.getEntityType() != EntityType.ENDER_DRAGON)
             return;
 
+        plugin.getLogger().info("=== DRAGON DEATH EVENT ===");
+
         EnderDragon dragon = (EnderDragon) event.getEntity();
 
-        // Retrieve the level from the dragon itself
-        int level = dragon.getPersistentDataContainer().getOrDefault(levelKey,
-                org.bukkit.persistence.PersistentDataType.INTEGER, 1);
+        // Retrieve the level from the dragon itself, or fallback to config if untagged
+        int level;
+        boolean hadPDC = dragon.getPersistentDataContainer().has(levelKey,
+                org.bukkit.persistence.PersistentDataType.INTEGER);
+        plugin.getLogger().info("Dragon has PDC level tag: " + hadPDC);
 
-        plugin.getConfig().set("next-dragon-level", level + 1); // Set the level for the NEXT one
+        if (hadPDC) {
+            level = dragon.getPersistentDataContainer().get(levelKey,
+                    org.bukkit.persistence.PersistentDataType.INTEGER);
+            plugin.getLogger().info("Retrieved level from PDC: " + level);
+        } else {
+            // Fallback for transition: if the dragon was already there, subtract 1 from
+            // "next" to get "current"
+            int configLevel = plugin.getConfig().getInt("next-dragon-level", 1);
+            level = Math.max(1, configLevel - 1);
+            plugin.getLogger().info("No PDC tag. Config next-dragon-level: " + configLevel + ", using level: " + level);
+        }
+
+        int newLevel = level + 1;
+        plugin.getLogger().info("Dragon Level " + level + " killed! Setting next-dragon-level to " + newLevel);
+
+        plugin.getConfig().set("next-dragon-level", newLevel);
         plugin.getConfig().set("next-respawn-time",
                 System.currentTimeMillis() + (plugin.getConfig().getInt("respawn-delay") * 1000L));
+
+        plugin.getLogger().info("Calling saveConfig()...");
         plugin.saveConfig();
+        plugin.getLogger().info("saveConfig() completed.");
+
+        plugin.getLogger().info(
+                "Verified next-dragon-level in memory: " + plugin.getConfig().getInt("next-dragon-level"));
 
         // Loot
+        plugin.getLogger().info("Generating loot for level " + level + "...");
         List<ItemStack> loot = LootTables.getLootForLevel(level);
         Location loc = dragon.getLocation();
+
+        plugin.getLogger().info("Dropping " + loot.size() + " loot items:");
         for (ItemStack item : loot) {
+            plugin.getLogger().info("  - " + item.getType() + " x" + item.getAmount());
             loc.getWorld().dropItemNaturally(loc, item);
         }
 
         // Dragon Heart
         if (level % 3 == 0) {
+            plugin.getLogger().info("Level " + level + " is divisible by 3 - dropping Dragon Heart!");
             loc.getWorld().dropItemNaturally(loc, artifactManager.createDragonHeart());
+        } else {
+            plugin.getLogger().info("Level " + level + " is NOT divisible by 3 - no Dragon Heart.");
         }
 
-        // XP Distribution (Paper limit is ~32k per orb, but multiple orbs look cooler)
+        // XP Distribution
         event.setDroppedExp(0);
         int totalXp = (int) LootTables.getExpForLevel(level, plugin.getConfig().getDouble("xp-scaling-factor", 0.1));
+        plugin.getLogger().info("Dropping " + totalXp + " XP in 5 orbs");
         int orbs = 5;
         for (int i = 0; i < orbs; i++) {
             ExperienceOrb orb = (ExperienceOrb) loc.getWorld().spawnEntity(loc, EntityType.EXPERIENCE_ORB);
@@ -185,7 +225,10 @@ public class DragonListener implements Listener {
         if (bossBar != null) {
             bossBar.removeAll();
             bossBar = null;
+            plugin.getLogger().info("Boss bar removed.");
         }
+
+        plugin.getLogger().info("=== DRAGON DEATH EVENT COMPLETE ===");
 
         // Announcement
         Component msg = Component
@@ -207,10 +250,8 @@ public class DragonListener implements Listener {
 
                 Bukkit.broadcast(
                         Component.text("A new Ender Dragon is beginning to awaken...", NamedTextColor.DARK_PURPLE));
-                if (dragon.getWorld().getEnderDragonBattle() != null) {
-                    dragon.getWorld().getEnderDragonBattle().initiateRespawn();
-                }
-                // Force spawn if battle API is failing or to ensure it happens
+
+                // Only use summon command (initiateRespawn can cause double spawns)
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
                         "execute in minecraft:the_end run summon ender_dragon 0 80 0");
             }

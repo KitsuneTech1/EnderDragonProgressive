@@ -85,7 +85,6 @@ public class EnderDragonProgressive extends JavaPlugin {
         if (endWorld.getEntitiesByClass(org.bukkit.entity.EnderDragon.class).isEmpty()) {
             getLogger().info("No active dragon found on startup. Spawning one immediately...");
 
-            getConfig().set("next-dragon-level", 0); // Temporary reset isn't needed here, just set respawn time to 0
             getConfig().set("next-respawn-time", 0);
             saveConfig();
 
