@@ -1,0 +1,26 @@
+# EnderDragonProgressive Configuration
+
+# Level of the next dragon that will spawn (e.g. 1, 2, 10...)
+# Editing this will change the level of the dragon next time it appears.
+next-dragon-level: 1
+
+# Respawn delay in seconds (10 minutes)
+respawn-delay: 600
+
+# Scaling Settings
+# Health scaling (Level 1-20: +7.5% per lvl, Level 21+: +1% per lvl)
+health-scaling-low: 1.075
+health-scaling-high: 1.01
+
+# Damage scaling (Level 1-20: +2% per lvl, Level 21+: +0.5% per lvl)
+damage-scaling-low: 1.02
+damage-scaling-high: 1.005
+
+# XP scaling (+10% base per level)
+xp-scaling-factor: 0.1
+
+# Maximum HP a player can gain from Dragon Hearts (Default 100 HP = 50 Hearts)
+max-player-health-cap: 100.0
+
+# Player specific health data (stored as UID: bonus_hp)
+player-health-bonuses: {}

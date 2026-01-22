@@ -1,0 +1,14 @@
+name: EnderDragonProgressive
+version: 1.0
+main: com.kitsune.enderdragon.EnderDragonProgressive
+api-version: '1.21'
+author: Kitsune
+description: A plugin that scales Ender Dragon difficulty and rewards.
+commands:
+  dragon:
+    description: Control the Ender Dragon Progressive plugin.
+    permission: enderdragon.admin
+permissions:
+  enderdragon.admin:
+    description: Allows administrative commands for the dragon plugin.
+    default: op
