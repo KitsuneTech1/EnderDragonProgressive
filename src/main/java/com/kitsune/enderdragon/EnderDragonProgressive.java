@@ -85,12 +85,12 @@ public class EnderDragonProgressive extends JavaPlugin {
         if (endWorld.getEntitiesByClass(org.bukkit.entity.EnderDragon.class).isEmpty()) {
             getLogger().info("No active dragon found on startup. Spawning one immediately...");
 
+            getConfig().set("next-dragon-level", 0); // Temporary reset isn't needed here, just set respawn time to 0
             getConfig().set("next-respawn-time", 0);
             saveConfig();
 
-            if (endWorld.getEnderDragonBattle() != null) {
-                endWorld.getEnderDragonBattle().initiateRespawn();
-            }
+            // Do NOT call initiateRespawn() here if we want an immediate summon
+            // just use the command to spawn it
             org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(),
                     "execute in minecraft:the_end run summon ender_dragon 0 80 0");
             org.bukkit.Bukkit.broadcast(net.kyori.adventure.text.Component.text("The Ender Dragon has returned!",

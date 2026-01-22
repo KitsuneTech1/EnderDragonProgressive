@@ -19,9 +19,14 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntitySpawnEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.boss.BarColor;
+import org.bukkit.boss.BarStyle;
+import org.bukkit.boss.BossBar;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.List;
@@ -34,6 +39,7 @@ public class DragonListener implements Listener {
     private final org.bukkit.NamespacedKey levelKey;
     private final Random random = new Random();
     private boolean roaredThisFight = false;
+    private BossBar bossBar;
 
     public DragonListener(EnderDragonProgressive plugin, ArtifactManager artifactManager) {
         this.plugin = plugin;
@@ -75,27 +81,55 @@ public class DragonListener implements Listener {
         // Paper has GENERIC_ATTACK_DAMAGE for some entities, but Dragon often uses
         // phases.
 
-        // Update Boss Bar Title (1-tick delay to ensure it overrides vanilla)
+        // Create and setup Custom Boss Bar
+        if (bossBar != null)
+            bossBar.removeAll();
+        bossBar = Bukkit.createBossBar(
+                "Level " + level + " Ender Dragon",
+                BarColor.PURPLE,
+                BarStyle.SOLID);
+        for (org.bukkit.entity.Player p : dragon.getWorld().getPlayers()) {
+            bossBar.addPlayer(p);
+        }
+
+        // Update Name Tag (5-tick delay to override vanilla name setting)
         new BukkitRunnable() {
             @Override
             public void run() {
                 if (!dragon.isValid())
                     return;
-                dragon.customName(Component.text("Level " + level + " Ender Dragon", NamedTextColor.DARK_PURPLE,
-                        TextDecoration.BOLD));
+                Component name = Component.text("Level " + level + " Ender Dragon", NamedTextColor.LIGHT_PURPLE,
+                        TextDecoration.BOLD);
+                dragon.customName(name);
                 dragon.setCustomNameVisible(true);
             }
-        }.runTaskLater(plugin, 1L);
+        }.runTaskLater(plugin, 5L);
 
         roaredThisFight = false;
 
-        // Ability Task
+        // Ability & UI Task
         new BukkitRunnable() {
             @Override
             public void run() {
-                if (dragon.isDead()) {
+                if (dragon.isDead() || !dragon.isValid()) {
+                    if (bossBar != null) {
+                        bossBar.removeAll();
+                        bossBar = null;
+                    }
                     this.cancel();
                     return;
+                }
+
+                // Sync Boss Bar
+                if (bossBar != null) {
+                    double progress = dragon.getHealth() / health;
+                    bossBar.setProgress(Math.clamp(progress, 0.0, 1.0));
+                    bossBar.setTitle("Level " + level + " Ender Dragon");
+                    // Ensure all players in End see it
+                    for (org.bukkit.entity.Player p : dragon.getWorld().getPlayers()) {
+                        if (!bossBar.getPlayers().contains(p))
+                            bossBar.addPlayer(p);
+                    }
                 }
 
                 if (level >= 5 && random.nextDouble() < 0.1) {
@@ -145,6 +179,12 @@ public class DragonListener implements Listener {
         for (int i = 0; i < orbs; i++) {
             ExperienceOrb orb = (ExperienceOrb) loc.getWorld().spawnEntity(loc, EntityType.EXPERIENCE_ORB);
             orb.setExperience(totalXp / orbs);
+        }
+
+        // Cleanup Boss Bar
+        if (bossBar != null) {
+            bossBar.removeAll();
+            bossBar = null;
         }
 
         // Announcement
@@ -218,7 +258,32 @@ public class DragonListener implements Listener {
     }
 
     @EventHandler
+    public void onWorldChange(PlayerChangedWorldEvent event) {
+        if (bossBar == null)
+            return;
+        if (event.getPlayer().getWorld().getEnvironment() == org.bukkit.World.Environment.THE_END) {
+            bossBar.addPlayer(event.getPlayer());
+        } else {
+            bossBar.removePlayer(event.getPlayer());
+        }
+    }
+
+    @EventHandler
+    public void onTeleport(PlayerTeleportEvent event) {
+        if (bossBar == null)
+            return;
+        if (event.getTo().getWorld().getEnvironment() == org.bukkit.World.Environment.THE_END) {
+            bossBar.addPlayer(event.getPlayer());
+        } else {
+            bossBar.removePlayer(event.getPlayer());
+        }
+    }
+
+    @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         artifactManager.applyHealthBonus(event.getPlayer());
+        if (bossBar != null && event.getPlayer().getWorld().getEnvironment() == org.bukkit.World.Environment.THE_END) {
+            bossBar.addPlayer(event.getPlayer());
+        }
     }
 }
