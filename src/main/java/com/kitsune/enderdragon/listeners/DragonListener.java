@@ -248,6 +248,19 @@ public class DragonListener implements Listener {
                 plugin.getConfig().set("next-respawn-time", 0);
                 plugin.saveConfig();
 
+                // Double check if a dragon was already spawned (e.g. by an admin or startup
+                // check)
+                org.bukkit.World endWorld = org.bukkit.Bukkit.getWorld("world_the_end");
+                if (endWorld == null)
+                    endWorld = org.bukkit.Bukkit.getWorlds().stream()
+                            .filter(w -> w.getEnvironment() == org.bukkit.World.Environment.THE_END).findFirst()
+                            .orElse(null);
+
+                if (endWorld != null && !endWorld.getEntitiesByClass(org.bukkit.entity.EnderDragon.class).isEmpty()) {
+                    plugin.getLogger().info("A dragon already exists. Cancelling scheduled respawn.");
+                    return;
+                }
+
                 Bukkit.broadcast(
                         Component.text("A new Ender Dragon is beginning to awaken...", NamedTextColor.DARK_PURPLE));
 

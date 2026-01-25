@@ -10,6 +10,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public class EnderDragonProgressive extends JavaPlugin {
 
     private ArtifactManager artifactManager;
+    private boolean isSpawnInProgress = false;
 
     @Override
     public void onEnable() {
@@ -43,6 +44,10 @@ public class EnderDragonProgressive extends JavaPlugin {
     }
 
     public void checkAndScheduleRespawn() {
+        if (isSpawnInProgress) {
+            return;
+        }
+
         org.bukkit.World endWorld = org.bukkit.Bukkit.getWorlds().stream()
                 .filter(w -> w.getEnvironment() == org.bukkit.World.Environment.THE_END)
                 .findFirst().orElse(null);
@@ -57,46 +62,68 @@ public class EnderDragonProgressive extends JavaPlugin {
             int oldLevel = getConfig().getInt("dragon-level");
             if (oldLevel > 0) {
                 getConfig().set("next-dragon-level", oldLevel);
-                // We keep the old key for one boot just in case, or we can remove it
                 getLogger().info("Migrated old 'dragon-level' value (" + oldLevel + ") to 'next-dragon-level'.");
                 saveConfig();
             }
         }
 
-        getLogger().info("Checking dragon status. Next level: " + getConfig().getInt("next-dragon-level"));
+        int nextLevel = getConfig().getInt("next-dragon-level");
+        getLogger().info("Checking dragon status. Next level in config: " + nextLevel);
 
         // Auto-detect previous kills for new installs
-        if (getConfig().getInt("next-dragon-level") <= 1) {
-            // Check if there is NO dragon but it HAS been killed before
+        if (nextLevel <= 1) {
             if (endWorld.getEnderDragonBattle() != null && endWorld.getEnderDragonBattle().hasBeenPreviouslyKilled()) {
-                if (getConfig().getInt("next-dragon-level") == 1 || getConfig().getInt("next-dragon-level") == 0) {
-                    getConfig().set("next-dragon-level", 2);
-                    saveConfig();
-                    getLogger().info("Detected previous vanilla kill. Next dragon set to Level 2.");
-                }
-            } else if (getConfig().getInt("next-dragon-level") == 0) {
-                // If it's a completely fresh world, start with level 1
+                getConfig().set("next-dragon-level", 2);
+                saveConfig();
+                getLogger().info("Detected previous vanilla kill. Next dragon set to Level 2.");
+            } else if (nextLevel == 0) {
                 getConfig().set("next-dragon-level", 1);
                 saveConfig();
             }
         }
 
-        // If no dragon exists, spawn one immediately
-        if (endWorld.getEntitiesByClass(org.bukkit.entity.EnderDragon.class).isEmpty()) {
-            getLogger().info("No active dragon found on startup. Spawning one immediately...");
+        // Robust Detection & Automatic Cleanup
+        java.util.Collection<org.bukkit.entity.EnderDragon> dragons = endWorld
+                .getEntitiesByClass(org.bukkit.entity.EnderDragon.class);
+        boolean battleDragonExists = endWorld.getEnderDragonBattle() != null
+                && endWorld.getEnderDragonBattle().getEnderDragon() != null;
 
-            getConfig().set("next-respawn-time", 0);
-            saveConfig();
+        getLogger().info("Detection: Found " + dragons.size() + " EnderDragon entities.");
+        getLogger().info("Detection: EnderDragonBattle dragon present: " + battleDragonExists);
 
-            // Do NOT call initiateRespawn() here if we want an immediate summon
-            // just use the command to spawn it
-            org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(),
-                    "execute in minecraft:the_end run summon ender_dragon 0 80 0");
-            org.bukkit.Bukkit.broadcast(net.kyori.adventure.text.Component.text("The Ender Dragon has returned!",
-                    net.kyori.adventure.text.format.NamedTextColor.DARK_PURPLE));
+        if (dragons.size() > 1) {
+            getLogger().warning("CRITICAL: Found " + dragons.size() + " dragons! Cleaning up extra dragons...");
+            for (org.bukkit.entity.EnderDragon d : dragons) {
+                d.remove();
+            }
+            // Trigger a single fresh spawn
+            spawnLegalDragon();
+        } else if (dragons.isEmpty() && !battleDragonExists) {
+            getLogger().info("No active dragon found. Spawning one...");
+            spawnLegalDragon();
         } else {
-            getLogger().info("Ender Dragon is already active.");
+            getLogger().info("Ender Dragon is already active (1 dragon found). Skipping spawn.");
         }
+    }
+
+    private void spawnLegalDragon() {
+        isSpawnInProgress = true;
+        getConfig().set("next-respawn-time", 0);
+        saveConfig();
+
+        org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(),
+                "execute in minecraft:the_end run summon ender_dragon 0 80 0");
+        org.bukkit.Bukkit
+                .broadcast(net.kyori.adventure.text.Component.text("A single, legal Ender Dragon has been summoned!",
+                        net.kyori.adventure.text.format.NamedTextColor.DARK_PURPLE));
+
+        // Reset guard after 1 second to allow entity to register
+        new org.bukkit.scheduler.BukkitRunnable() {
+            @Override
+            public void run() {
+                isSpawnInProgress = false;
+            }
+        }.runTaskLater(this, 20L);
     }
 
     @Override

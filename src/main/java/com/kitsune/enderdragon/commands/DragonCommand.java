@@ -36,6 +36,42 @@ public class DragonCommand implements CommandExecutor {
             return true;
         }
 
+        if (args[0].equalsIgnoreCase("kill")) {
+            org.bukkit.World endWorld = org.bukkit.Bukkit.getWorlds().stream()
+                    .filter(w -> w.getEnvironment() == org.bukkit.World.Environment.THE_END)
+                    .findFirst().orElse(null);
+
+            if (endWorld == null) {
+                sender.sendMessage(Component.text("End world not found!", NamedTextColor.RED));
+                return true;
+            }
+
+            int count = 0;
+            for (org.bukkit.entity.EnderDragon dragon : endWorld
+                    .getEntitiesByClass(org.bukkit.entity.EnderDragon.class)) {
+                dragon.remove();
+                count++;
+            }
+
+            Component msg = Component.text("Removed " + count + " dragons from the End.", NamedTextColor.GREEN);
+            sender.sendMessage(msg);
+
+            // Notify all ops
+            for (org.bukkit.entity.Player player : org.bukkit.Bukkit.getOnlinePlayers()) {
+                if (player.isOp() && player != sender) {
+                    player.sendMessage(msg);
+                }
+            }
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("spawn")) {
+            org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(),
+                    "execute in minecraft:the_end run summon ender_dragon 0 80 0");
+            sender.sendMessage(Component.text("A new legal dragon has been spawned.", NamedTextColor.GREEN));
+            return true;
+        }
+
         if (args[0].equalsIgnoreCase("setlevel") && args.length == 2) {
             try {
                 int level = Integer.parseInt(args[1]);
